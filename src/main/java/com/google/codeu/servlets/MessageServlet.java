@@ -19,7 +19,10 @@ package com.google.codeu.servlets;
 import com.google.appengine.api.users.UserService;
 import com.google.appengine.api.users.UserServiceFactory;
 import com.google.codeu.data.Datastore;
+import com.google.codeu.data.User;
 import com.google.codeu.data.Message;
+import com.google.codeu.data.Question;
+import com.google.codeu.data.Request;
 import com.google.gson.Gson;
 import java.io.IOException;
 import java.util.List;
@@ -29,6 +32,9 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Whitelist;
+import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Handles fetching and saving {@link Message} instances. */
 @WebServlet("/messages")
@@ -57,8 +63,25 @@ public class MessageServlet extends HttpServlet {
       response.getWriter().println("[]");
       return;
     }
-
-    List<Message> messages = datastore.getMessages(user);
+      List<Request> myRequests = datastore.getIncomingRequests(user);
+      //User me = datastore.getUser(user);
+      //System.out.println(me.toString());
+      //List<String> advs = me.getAdvisees();
+      ArrayList<String> advs = new ArrayList<String>();
+      advs.add(user);
+      for(Request req : myRequests){
+          if(req.getStatus() == 1){
+              advs.add(req.getRequester());
+          }
+      }
+    List<Question> messages = datastore.getFriendQuestions(advs);
+      for (Question question : messages){
+          List<Message> kids = new ArrayList<>();
+          for (UUID id : question.getAnswers()){
+              kids.add(datastore.getIDMessage(id.toString()));
+          }
+          question.setHack(kids);
+      }
     Gson gson = new Gson();
     String json = gson.toJson(messages);
 
@@ -76,10 +99,29 @@ public class MessageServlet extends HttpServlet {
     }
 
     String user = userService.getCurrentUser().getEmail();
-    String text = Jsoup.clean(request.getParameter("text"), Whitelist.none());
-
-    Message message = new Message(user, text);
-    datastore.storeMessage(message);
+    Whitelist whitelist = Whitelist.simpleText();
+    whitelist.addTags("ins", "strike", "sub", "sup");
+    String text = Jsoup.clean(request.getParameter("text"), whitelist);
+      long acc = -1;
+      switch(request.getParameter("privacy")){
+          case "public":
+              acc = 0;
+              break;
+          case "private":
+              acc = 2;
+              break;
+          case "both":
+              acc = 1;
+              break;
+          default:
+              acc = 1;
+              
+      }
+    Question message = new Question(user, text, acc);
+    datastore.storeQuestion(message);
+      
+    User userU = new User(user, null);
+    datastore.storeUser(userU);
 
     response.sendRedirect("/user-page.html?user=" + user);
   }

@@ -24,23 +24,34 @@ function addLoginOrLogoutLinkToNavigation() {
     console.warn('Navigation element not found!');
     return;
   }
+  else {
+    navigationElement.appendChild(createListItem(createLink(
+      '/index.html', 'Home')));
+    navigationElement.appendChild(createListItem(createLink(
+      '/aboutus.html', 'About Our Team')));
+    navigationElement.appendChild(createListItem(createLink(
+      '/feed.html', 'Public Feed')));
+
+  }
 
   fetch('/login-status')
-      .then((response) => {
-        return response.json();
-      })
-      .then((loginStatus) => {
-        if (loginStatus.isLoggedIn) {
-          navigationElement.appendChild(createListItem(createLink(
-              '/user-page.html?user=' + loginStatus.username, 'Your Page')));
+    .then((response) => {
+      return response.json();
+    })
+    .then((loginStatus) => {
+      if (loginStatus.isLoggedIn) {
+        navigationElement.appendChild(createListItem(createLink(
+          '/user-page.html?user=' + loginStatus.username, 'Your Page')));
+        navigationElement.appendChild(
+          createListItem(createLink('/advisors.html?user=' + loginStatus.username, 'Your Advisors')));
+        navigationElement.appendChild(
+          createListItem(createLink('/logout', 'Logout')));
 
-          navigationElement.appendChild(
-              createListItem(createLink('/logout', 'Logout')));
-        } else {
-          navigationElement.appendChild(
-              createListItem(createLink('/login', 'Login')));
-        }
-      });
+      } else {
+        navigationElement.appendChild(
+          createListItem(createLink('/login', 'Login')));
+      }
+    });
 }
 
 /**

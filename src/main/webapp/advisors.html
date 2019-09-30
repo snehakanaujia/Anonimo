@@ -1,0 +1,40 @@
+<head>
+  <header>
+    <h1 class="logo">Your Advisors</h1>
+    <nav>
+      <ul id="navigation">
+        <script src="/js/navigation-loader.js"></script>
+        <script>addLoginOrLogoutLinkToNavigation();</script>
+      </ul>
+    </nav>
+    <label for="nav-toggle" class="nav-toggle-label">
+      <span></span>
+    </label>
+  </header>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+
+<script type="text/javascript" src="js/advisors.js">
+</script>
+<script>fetchAdvisors();</script>
+<script>fetchRequests();</script>
+<script>buildUI();</script>
+
+<body onload="buildUI()">
+  <h2>Your Advisors:</h2>
+  <div id="advisors-container">Loading...</div>
+  <h2>Your Advisees:</h2>
+  <div id="advisees-container">Loading...</div>
+  <div>
+    <h2>Request new advisors:</h2>
+
+    <form id="request-form" action="/requests" method="POST" class="hidden">
+      <textarea name="text" id="request-input" placeholder="Enter a user's email"></textarea>
+      <input type="submit" value="Submit">
+    </form>
+
+  </div>
+  <h2>Your Requests:</h2>
+  <div id="requests-container"></div>
+</body>

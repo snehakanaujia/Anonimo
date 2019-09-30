@@ -23,9 +23,20 @@ import com.google.appengine.api.datastore.PreparedQuery;
 import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Query.SortDirection;
+import com.google.appengine.api.datastore.FetchOptions;
+import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.api.datastore.Key;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Iterator;
+
+import java.util.Arrays;
+
+import java.util.Set;
+import java.util.HashSet;
+
 
 /** Provides access to the data stored in Datastore. */
 public class Datastore {
@@ -35,6 +46,122 @@ public class Datastore {
   public Datastore() {
     datastore = DatastoreServiceFactory.getDatastoreService();
   }
+
+
+  public void storeRequest(Request request){
+    Entity requestEntity = new Entity("Request", request.getID().toString());
+    requestEntity.setProperty("requester", request.getRequester());
+    requestEntity.setProperty("requestee", request.getRequestee());
+    requestEntity.setProperty("timestamp", request.getTimestamp());
+    requestEntity.setProperty("status",request.getStatus());
+
+    datastore.put(requestEntity);
+  }
+
+  public List<Request> getIncomingRequests(String requestee) {
+    List<Request> requests = new ArrayList<Request>();
+
+    Query query =
+        new Query("Request")
+            //The setFilter line was here originally but not in the Step 3 provided code
+            .setFilter(new Query.FilterPredicate("requestee", FilterOperator.EQUAL, requestee))
+            .addSort("timestamp", SortDirection.DESCENDING);
+    PreparedQuery results = datastore.prepare(query);
+
+    return requestHelper(requestee, requests, query, results);
+  }
+    public List<Request> getOutgoingRequests(String requester) {
+        List<Request> requests = new ArrayList<Request>();
+        
+        Query query =
+        new Query("Request")
+        //The setFilter line was here originally but not in the Step 3 provided code
+        .setFilter(new Query.FilterPredicate("requester", FilterOperator.EQUAL, requester))
+        .addSort("timestamp", SortDirection.DESCENDING);
+        PreparedQuery results = datastore.prepare(query);
+        
+        return requestHelper("getAllRequests", requests, query, results);
+    }
+
+  public List<Request> getAllRequests() {
+    List<Request> requests = new ArrayList<Request>();
+
+    Query query =
+        new Query("Request")
+            //The setFilter line was here originally but not in the Step 3 provided code
+            .addSort("timestamp", SortDirection.DESCENDING);
+    PreparedQuery results = datastore.prepare(query);
+
+    return requestHelper("getAllRequests", requests, query, results);
+  }
+
+
+
+  public List<Request> requestHelper(String userOrAll, List<Request> requests, Query query, PreparedQuery results) {
+    for (Entity entity : results.asIterable()) {
+      try {
+        String idString = entity.getKey().getName();
+        UUID id = UUID.fromString(idString);
+
+        String requestee;
+        //The users need only be specified when all messages of possibly more than one user is being shown
+        if(userOrAll.equals("getAllRequests")) {
+          requestee = (String) entity.getProperty("requestee");
+        }
+        else {
+          requestee = userOrAll;
+        }
+
+        String requester = (String) entity.getProperty("requester");
+        long timestamp = (long) entity.getProperty("timestamp");
+        long status = (long) entity.getProperty("status");
+
+        Request request = new Request(id,requester,requestee,timestamp,status);
+        requests.add(request);
+      } catch (Exception e) {
+        System.err.println("Error reading request.");
+        System.err.println(entity.toString());
+        e.printStackTrace();
+      }
+    }
+
+    return requests;
+  }
+
+  public Request getRequestByID(String parentID){
+
+   Query query = new Query("Request")
+    .setFilter(new Query.FilterPredicate("UUID", FilterOperator.EQUAL, parentID));
+  PreparedQuery results = datastore.prepare(query);
+  Key parent = KeyFactory.createKey("Request", parentID);
+    
+    try{
+        Entity requestEntity = datastore.get(parent);
+
+        String requestee = (String) requestEntity.getProperty("requestee");
+        String requester = (String) requestEntity.getProperty("requester");
+        long timestamp = (long) requestEntity.getProperty("timestamp");
+        long status = (long) requestEntity.getProperty("status");
+        UUID id = UUID.fromString(parentID);
+
+        //System.out.println(requestee);
+        //System.out.println(requester);
+        Request request = new Request(id,requester,requestee,timestamp,status);
+        return request;
+
+    }catch(Exception e){
+        System.out.println("Not Found");
+        e.printStackTrace();
+    }
+    return null;
+
+    
+  }
+  
+
+
+
+
 
   /** Stores the Message in Datastore. */
   public void storeMessage(Message message) {
@@ -53,18 +180,77 @@ public class Datastore {
    *     message. List is sorted by time descending.
    */
   public List<Message> getMessages(String user) {
-    List<Message> messages = new ArrayList<>();
+    List<Message> messages = new ArrayList<Message>();
 
     Query query =
         new Query("Message")
+            //The setFilter line was here originally but not in the Step 3 provided code
             .setFilter(new Query.FilterPredicate("user", FilterOperator.EQUAL, user))
             .addSort("timestamp", SortDirection.DESCENDING);
     PreparedQuery results = datastore.prepare(query);
 
+    return messageHelper(user, messages, query, results);
+  }
+    
+    
+    public Message getIDMessage(String parentID) {
+        List<Question> messages = new ArrayList<Question>();
+        Query query = new Query("Message").setFilter(new Query.FilterPredicate("UUID", FilterOperator.EQUAL, parentID)).addSort("timestamp", SortDirection.DESCENDING);
+        //PreparedQuery results = datastore.prepare(query);
+        //System.out.println(results.toString());
+        Key parent = KeyFactory.createKey("Message", parentID);
+        try{
+            Entity entity = datastore.get(parent);
+            String user = (String) entity.getProperty("user");
+            String idString = entity.getKey().getName();
+            UUID id = UUID.fromString(idString);
+            //UserID is unique, so this should only ever resolve to one message.
+            String text = (String) entity.getProperty("text");
+            long timestamp = (long) entity.getProperty("timestamp");
+            Message message = new Message(id, user, text, timestamp);
+            return message;
+        }catch(Exception e){
+            System.out.println("ugh");
+            System.out.println("couldn't find it?");
+            e.printStackTrace();
+        }
+        Message thing = new Message("nobody", "debug");
+        return thing;
+        /*
+        List<Message> messages = new ArrayList<Message>();
+        Query query = new Query("Message").setFilter(new Query.FilterPredicate("UUID", FilterOperator.EQUAL, parentID));
+        PreparedQuery results = datastore.prepare(query);
+        String user = (String) results.asSingleEntity().getProperty("user");
+        messageHelper(user, messages, query, results);
+        return messages.get(0);
+         */
+    }
+
+  public List<Message> getAllMessages(){
+    List<Message> messages = new ArrayList<Message>();
+
+    Query query = new Query("Message")
+      .addSort("timestamp", SortDirection.DESCENDING);
+    PreparedQuery results = datastore.prepare(query);
+
+    return messageHelper("getAllMessages", messages, query, results);
+ }
+  
+  public List<Message> messageHelper(String userOrAll, List<Message> messages, Query query, PreparedQuery results) {
     for (Entity entity : results.asIterable()) {
       try {
         String idString = entity.getKey().getName();
         UUID id = UUID.fromString(idString);
+
+        String user;
+        //The users need only be specified when all messages of possibly more than one user is being shown
+        if(userOrAll.equals("getAllMessages")) {
+          user = (String) entity.getProperty("user");
+        }
+        else {
+          user = userOrAll;
+        }
+
         String text = (String) entity.getProperty("text");
         long timestamp = (long) entity.getProperty("timestamp");
 
@@ -79,4 +265,286 @@ public class Datastore {
 
     return messages;
   }
+
+ /** Stores the User in Datastore. */
+
+ public void storeUser(User user) {
+     User doublecheck = getUser(user.getEmail());
+     if(doublecheck != null){
+         if(user.getAboutMe() == null && doublecheck.getAboutMe() != null){
+             user.setAboutMe(doublecheck.getAboutMe());
+         }
+         if(user.getFirstName() == null && doublecheck.getFirstName() != null){
+             user.setFirstName(doublecheck.getFirstName());
+         }
+         if(user.getLastName() == null && doublecheck.getLastName() != null){
+             user.setLastName(doublecheck.getLastName());
+         }
+         /*if(user.getAdvisees() == null && doublecheck.getAdvisees() != null){
+             user.setAdvisees(doublecheck.getAdvisees());
+         }
+         if(user.getAdvisors() == null && doublecheck.getAdvisors() != null){
+             user.setAdvisors(doublecheck.getAdvisors());
+         }
+          */
+     }
+  Entity userEntity = new Entity("User", user.getEmail());
+  userEntity.setProperty("email", user.getEmail());
+  userEntity.setProperty("aboutMe", user.getAboutMe());
+     userEntity.setProperty("firstName", user.getFirstName());
+     userEntity.setProperty("lastName", user.getLastName());
+     //userEntity.setProperty("advisees", user.getAdviseesToString());
+     //userEntity.setProperty("advisors", user.getAdvisorsToString());
+  datastore.put(userEntity);
+
+ }
+
+ 
+
+ /**
+
+  * Returns the User owned by the email address, or
+
+  * null if no matching User was found.
+
+  */
+
+ public User getUser(String email) {
+
+  Query query = new Query("User")
+    .setFilter(new Query.FilterPredicate("email", FilterOperator.EQUAL, email));
+  PreparedQuery results = datastore.prepare(query);
+  Entity userEntity = results.asSingleEntity();
+  if(userEntity == null) {return null; }
+  String aboutMe = (String) userEntity.getProperty("aboutMe");
+      //ArrayList<String> advisees = new ArrayList<String>(Arrays.asList(((String) userEntity.getProperty("advisees")).split(" ")));
+      //ArrayList<String> advisors = new ArrayList<String>(Arrays.asList(((String) userEntity.getProperty("advisors")).split(" ")));
+      String fn = (String) userEntity.getProperty("firstName");
+      String ln = (String) userEntity.getProperty("lastName");
+  User user = new User(email, fn, ln, aboutMe);
+  return user;
+
+ }
+
+  
+ /** Returns the total number of messages for all users. */
+public int getTotalMessageCount(){
+  Query query = new Query("Message");
+  Query query2 = new Query("Question");
+  PreparedQuery results = datastore.prepare(query);
+    PreparedQuery results2 = datastore.prepare(query2);
+  return results.countEntities(FetchOptions.Builder.withLimit(1000)) + results2.countEntities(FetchOptions.Builder.withLimit(1000));
+}
+
+
+public long getAverageMessageLength(){
+  Query query = new Query("Message");
+    Query query2 = new Query("Question");
+  PreparedQuery results = datastore.prepare(query);
+    PreparedQuery results2 = datastore.prepare(query2);
+
+  long totalChars=0;
+  for (Entity entity : results.asIterable()) {
+    String text = (String) entity.getProperty("text");
+    totalChars+= text.length();
+  }
+    for (Entity entity : results2.asIterable()) {
+        String text = (String) entity.getProperty("text");
+        totalChars+= text.length();
+    }
+  long tot = getTotalMessageCount();
+  return totalChars/tot;
+
+}
+
+public int getLongestMessage(){
+  Query query = new Query("Message");
+    Query query2 = new Query("Question");
+  PreparedQuery results = datastore.prepare(query);
+    PreparedQuery results2 = datastore.prepare(query2);
+
+  int maxLength = 0;
+  for (Entity entity : results.asIterable()) {
+    String s = (String) entity.getProperty("text");
+    if (s.length() > maxLength) {
+              maxLength = s.length();
+          }
+  }
+    for (Entity entity : results2.asIterable()) {
+        String s = (String) entity.getProperty("text");
+        if (s.length() > maxLength) {
+            maxLength = s.length();
+        }
+    }
+  return maxLength;
+  
+}
+
+    //And so begin the Question methods
+    /** Stores the Message in Datastore. */
+    public void storeQuestion(Question message) {
+        Entity messageEntity = new Entity("Question", message.getId().toString());
+        messageEntity.setProperty("user", message.getUser());
+        messageEntity.setProperty("text", message.getText());
+        messageEntity.setProperty("timestamp", message.getTimestamp());
+        messageEntity.setProperty("children", message.getKidsToString());
+        messageEntity.setProperty("privacy", message.getAccess());
+        datastore.put(messageEntity);
+    }
+    
+    /**
+     * Gets messages posted by a specific user.
+     *
+     * @return a list of messages posted by the user, or empty list if user has never posted a
+     *     message. List is sorted by time descending.
+     */
+    public List<Question> getQuestions(String user) {
+        List<Question> messages = new ArrayList<Question>();
+        
+        Query query =
+        new Query("Question")
+        //The setFilter line was here originally but not in the Step 3 provided code
+        .setFilter(new Query.FilterPredicate("user", FilterOperator.EQUAL, user))
+        .addSort("timestamp", SortDirection.DESCENDING);
+        PreparedQuery results = datastore.prepare(query);
+        
+        return questionHelper(user, messages, query, results);
+    }
+    
+    public List<Question> getFriendQuestions(List<String> advisees) {
+        List<Question> messages = new ArrayList<Question>();
+        List<Query.Filter> filters = new ArrayList<Query.Filter>();
+        List<Query.Filter> privacies = new ArrayList<Query.Filter>();
+        filters.add(new Query.FilterPredicate("user", FilterOperator.EQUAL, ""));
+        for(String adv : advisees){
+            filters.add(new Query.FilterPredicate("user", FilterOperator.EQUAL, adv));
+        }
+        privacies.add(new Query.FilterPredicate("privacy", FilterOperator.EQUAL, 1));
+        privacies.add(new Query.FilterPredicate("privacy", FilterOperator.EQUAL, 2));
+        Query.CompositeFilter friends = new Query.CompositeFilter(Query.CompositeFilterOperator.AND, Arrays.asList(
+                new Query.CompositeFilter(Query.CompositeFilterOperator.OR, filters),
+                new Query.CompositeFilter(Query.CompositeFilterOperator.OR, privacies)));
+        Query.CompositeFilter you = new Query.CompositeFilter(Query.CompositeFilterOperator.AND,Arrays.asList(
+                new Query.FilterPredicate("user", FilterOperator.EQUAL, advisees.get(0)),
+                new Query.FilterPredicate("privacy", FilterOperator.EQUAL, 0)));
+        Query query =
+        new Query("Question")
+        .setFilter(new Query.CompositeFilter(Query.CompositeFilterOperator.OR, Arrays.asList(friends, you)))
+        //The setFilter line was here originally but not in the Step 3 provided code
+        .addSort("timestamp", SortDirection.DESCENDING);
+        PreparedQuery results = datastore.prepare(query);
+        
+        return questionHelper("getAllMessages", messages, query, results);
+    }
+    
+    
+    public Question getIDQuestion(String parentID) {
+        List<Question> messages = new ArrayList<Question>();
+        Query query = new Query("Question").setFilter(new Query.FilterPredicate("UUID", FilterOperator.EQUAL, parentID)).addSort("timestamp", SortDirection.DESCENDING);
+        //PreparedQuery results = datastore.prepare(query);
+        //System.out.println(results.toString());
+        Key parent = KeyFactory.createKey("Question", parentID);
+        try{
+            Entity entity = datastore.get(parent);
+            String user = (String) entity.getProperty("user");
+            String idString = entity.getKey().getName();
+            UUID id = UUID.fromString(idString);
+            //UserID is unique, so this should only ever resolve to one message.
+            String text = (String) entity.getProperty("text");
+            long timestamp = (long) entity.getProperty("timestamp");
+            String kids = (String) entity.getProperty("children");
+            long access = (long) entity.getProperty("privacy");
+            
+            Question message = new Question(id, user, text, timestamp, access);
+            
+            if (kids.length() > 0){
+                List<UUID> children = new ArrayList<>();
+                List<String> itemList = Arrays.asList(kids.split(":"));
+                for (String childID : itemList){
+                    children.add(UUID.fromString(childID));
+                }
+                message.setChildren(children);
+            }
+            return message;
+        }catch(Exception e){
+            System.out.println("ugh");
+            System.out.println("couldn't find it?");
+            e.printStackTrace();
+        }
+        
+        Question thing = new Question("nobody", "debug");
+        return thing;
+    }
+    
+    public List<Question> getAllQuestions(){
+        List<Question> messages = new ArrayList<Question>();
+        List<Query.Filter> privacies = new ArrayList<Query.Filter>();
+        privacies.add(new Query.FilterPredicate("privacy", FilterOperator.EQUAL, 1));
+        privacies.add(new Query.FilterPredicate("privacy", FilterOperator.EQUAL, 0));
+        
+        Query query = new Query("Question")
+        .setFilter(new Query.CompositeFilter(Query.CompositeFilterOperator.OR, privacies))
+        .addSort("timestamp", SortDirection.DESCENDING);
+        PreparedQuery results = datastore.prepare(query);
+        
+        return questionHelper("getAllMessages", messages, query, results);
+    }
+    
+    public List<Question> questionHelper(String userOrAll, List<Question> messages, Query query, PreparedQuery results) {
+        for (Entity entity : results.asIterable()) {
+            try {
+                String idString = entity.getKey().getName();
+                UUID id = UUID.fromString(idString);
+                
+                String user;
+                //The users need only be specified when all messages of possibly more than one user is being shown
+                if(userOrAll.equals("getAllMessages")) {
+                    user = (String) entity.getProperty("user");
+                }
+                else {
+                    user = userOrAll;
+                }
+                
+                String text = (String) entity.getProperty("text");
+                long timestamp = (long) entity.getProperty("timestamp");
+                String kids = (String) entity.getProperty("children");
+                long privacy = (long) entity.getProperty("privacy");
+                
+                Question message = new Question(id, user, text, timestamp, privacy);
+                if (kids == null){
+                    kids = "";
+                }
+                System.out.println(kids);
+                System.out.println(kids.length());
+                if (kids.length() > 0){
+                    List<UUID> children = new ArrayList<>();
+                    List<String> itemList = Arrays.asList(kids.split(":"));
+                    for (int i = 0; i < itemList.size(); i++){
+                        System.out.println(itemList.get(i));
+                        children.add(UUID.fromString(itemList.get(i)));
+                    }
+                    message.setChildren(children);
+                }
+                
+                messages.add(message);
+            } catch (Exception e) {
+                System.err.println("Error reading message.");
+                System.err.println(entity.toString());
+                e.printStackTrace();
+            }
+        }
+        
+        return messages;
+    }
+
+public Set<String> getUsers(){
+  Set<String> users = new HashSet<>();
+  Query query = new Query("Question");
+  PreparedQuery results = datastore.prepare(query);
+  for(Entity entity : results.asIterable()) {
+    users.add((String) entity.getProperty("user"));
+  }
+  return users;
+}
+
 }
